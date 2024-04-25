@@ -1,2 +1,12 @@
-# ParserForEtuApplicants
-This project was completed in the summer of 2023. I uploaded it to GitHub as v.1.0
+# ParserForEtuApplicants v.1.0
+Терминальное приложение, которое, обрабатывая сайт ETU, создаёт текстовый файл с максимальными проходными баллами на текущий момент, распределяя абитуриентов по направлениям
+
+## Для запуска должен быть установлен интерпретатор Python3, а также  Selenium 4.16.0 и Webdriver_manager 4.0.0
+```
+pip install selenium==4.16.0
+```
+```
+pip install webdriver_manager==4.0.0
+```
+## Пути развития проекта:
+- Полностью скачать весь сайт со всеми дочерними ссылками, чтобы иметь возможность запускать проект локально
