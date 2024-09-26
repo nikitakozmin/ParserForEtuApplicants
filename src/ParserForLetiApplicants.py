@@ -1,43 +1,64 @@
 '''This script calculates the current LETI passing scores'''
 
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium import webdriver
 import time
 
 
-def initialize_browser(deployed):
+def initialize_chrome(isdeployed):
     print('Загрузка браузера...')
-    if deployed:
-        return webdriver.Chrome(service=Service(ChromeDriverManager().install()))
+    if isdeployed:
+        return webdriver.Chrome()
     options = webdriver.ChromeOptions()
     options.add_argument('headless')
-    return webdriver.Chrome(options, service=Service(ChromeDriverManager().install()))
+    return webdriver.Chrome(options)
 
+def browser_scrolling(browser: webdriver.Chrome, scroll_size):
+    browser.execute_script('window.scrollTo(0, {})'.format(scroll_size))
+    # Допускается, что элемент поместится в окне, если пролистать до него
+    # Алгоритм идет до элемента пока не останется треть окна до него
+    while browser.execute_script('return window.scrollY + window.innerHeight*0.33') < scroll_size-5 and \
+            browser.execute_script('return window.scrollY') < \
+            browser.execute_script('return document.documentElement.scrollHeight - window.innerHeight*1.66'):
+        pass
+    browser.execute_script('window.scrollTo(0, {})'.format(browser.execute_script('return window.scrollY')))
+
+def check_list_presence_on_page(browser: webdriver.Chrome):
+    start = time.time()
+    wasted_time = 0
+    while not browser.find_elements(By.ID, "list"):
+        wasted_time = time.time()-start
+        if wasted_time >= 5:
+            print("Списки отсутствуют, прошло время ожидания от сервера")
+            raise ValueError("There are no competition lists in the url")
 
 def passing_pages_leti_applicants(handler):
-    '''Явная имитация действий пользователя (проще, но дольше, чем парсинг html)'''
-    def wrapper(browser):
+    '''Explicit imitation of user actions (easier, but longer than parsing html)'''
+    def wrapper(browser: webdriver.Chrome):
+        print("Проверяем наличие конкурсных списков...")
+        check_list_presence_on_page(browser)
         elements = browser.find_elements(By.LINK_TEXT, 'перечень')
         count = len(elements)
         print('Обработано страниц:')
         print(f'0/{count}')
-        for i in range(count):
+        scrolls_for_elements_starts = [e.location['y'] for e in elements]
+        for i in range(0, count, 2):
+            while not browser.find_elements(By.ID, "list"):
+                pass
+            browser_scrolling(browser, scrolls_for_elements_starts[i])
             e = browser.find_elements(By.LINK_TEXT, 'перечень')[i]
-            browser.execute_script('window.scrollTo(0, {})'.format(e.location['y']))
-            time.sleep(1)  # Ожидание прокрутки (желательно переделать)
             e.click()
-            handler(browser)
+            # handler(browser)
             print(f'{i + 1}/{count}')
             browser.back()
-        browser.quit()
     return wrapper
 
 
 @passing_pages_leti_applicants
-def _process_the_pages_leti_applicants(browser):
-
+def _process_the_pages_leti_applicants(browser: webdriver.Chrome):
+    check_list_presence_on_page(browser)
+    
     # Проверка на бюджет
     e = browser.find_element(By.CLASS_NAME, 'justify-content-between')
     if 'Бюджет' not in e.text:
@@ -45,8 +66,7 @@ def _process_the_pages_leti_applicants(browser):
 
     # Нажатие на кнопку "Приоритет №1"
     e = browser.find_element(By.ID, 'priority')
-    browser.execute_script('window.scrollTo(0, {})'.format(e.location['y']))
-    time.sleep(1)  # Ожидание прокрутки (желательно переделать)
+    browser_scrolling(browser, e.location['y'])
     e.click()
 
     # Обновление directions и applicants
@@ -63,7 +83,7 @@ def _process_the_pages_leti_applicants(browser):
         line[1] = f'{line[1]} {line[2]}'
         del line[2], line[0]
         line = tuple(line)
-        value = applicants.get(line[0], [])
+        value: list = applicants.get(line[0], [])
         value.append([
             int(line[1]), direction, line[2], *map(int, line[3:9]), line[9], line[10]
         ])
@@ -159,12 +179,13 @@ def save_min_conditions(directions):
 
 
 if __name__ == '__main__':
-    driver = initialize_browser(deployed=True)
-    url = 'https://abit.etu.ru/ru/postupayushhim/bakalavriat-i-specialitet/spiski-podavshih-zayavlenie/?competitions=1-1'
-    #url = 'file:///C:/Users/kozmi/%D0%9C%D0%BE%D0%B9%20%D0%B4%D0%B8%D1%81%D0%BA/%D0%A0%D0%B0%D0%B1%D0%BE%D1%82%D0%B0/%D0%9F%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5/Python/Scripts/Python%20files/LocalParserForLetiApplicants/%D0%A1%D0%BF%D0%B8%D1%81%D0%BA%D0%B8%20%D0%BF%D0%BE%D0%B4%D0%B0%D0%B2%D1%88%D0%B8%D1%85%20%D0%B7%D0%B0%D1%8F%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D0%B5.html'
-    driver.get(url)
+    # url = 'https://abit.etu.ru/ru/postupayushhim/bakalavriat-i-specialitet/spiski-podavshih-zayavlenie/?competitions=1-1'
+    # url = 'file:///C:/Users/kozmi/%D0%9C%D0%BE%D0%B9%20%D0%B4%D0%B8%D1%81%D0%BA/%D0%A0%D0%B0%D0%B1%D0%BE%D1%82%D0%B0/%D0%9F%D1%80%D0%BE%D0%B3%D1%80%D0%B0%D0%BC%D0%BC%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5/Python/Scripts/Python%20files/LocalParserForLetiApplicants/%D0%A1%D0%BF%D0%B8%D1%81%D0%BA%D0%B8%20%D0%BF%D0%BE%D0%B4%D0%B0%D0%B2%D1%88%D0%B8%D1%85%20%D0%B7%D0%B0%D1%8F%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D0%B5.html'
+    url = "https://abit.etu.ru/ru/postupayushhim/aspirantura/spiski-podavshih-zayavlenie/?competitions=3-2"
     directions, applicants = dict(), dict()
-    _process_the_pages_leti_applicants(driver)
-    _use_applicants_for_distribution_in_directions()
-    save_min_conditions(directions)
-    time.sleep(3)
+    with initialize_chrome(isdeployed=True) as driver:
+        driver.get(url)
+        _process_the_pages_leti_applicants(driver)
+        # _use_applicants_for_distribution_in_directions()
+        # save_min_conditions(directions)
+        print("Завершение работы...")
